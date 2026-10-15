@@ -54,14 +54,19 @@ import org.eclipse.swt.widgets.TableColumn;
 import org.eclipse.swt.widgets.Text;
 
 import com.archimatetool.editor.ui.ArchiLabelProvider;
+import com.archimatetool.model.IArchimateModel;
 import com.archimatetool.model.IArchimateRelationship;
 import com.archimatetool.model.IDiagramModelArchimateConnection;
 import com.archimatetool.model.IDiagramModel;
+import com.archimatetool.model.IDiagramModelConnection;
+import com.archimatetool.model.IDiagramModelObject;
 import com.archimatetool.model.IFeature;
 import com.archimatetool.model.IFolder;
 import com.archimatetool.model.IIdentifier;
 import com.archimatetool.model.IProperty;
+import com.archimatetool.modelrepository.dialogs.DiagramVisualApplier.VisualDecision;
 import com.archimatetool.modelrepository.dialogs.ViewComparisonComposite;
+import com.archimatetool.modelrepository.dialogs.ViewDiffComposite;
 
 /**
  * Modal UI for reviewing REAL EMF Compare conflicts before merge: per-property rows, LOCAL/REMOTE choice,
@@ -82,8 +87,16 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	private TableViewer masterViewer;
 	private StyledText infoText;
 	private Button btnVisualCompare;
+	private Button btnVisualDiff;
 
 	private Map<Diff, Boolean> diffResolutions = new HashMap<>();
+	private final Set<String> keepLocalVisualIds = new LinkedHashSet<>();
+	/** Folder merge decisions keyed by folder child id (shared by every folder the child appears in). */
+	private final Map<String, VisualDecision> folderItemDecisions = new LinkedHashMap<>();
+	/** Non-conflicting REMOTE folder content diffs the user rejected (kept LOCAL). */
+	private final Set<Diff> forcedLocalDiffs = new LinkedHashSet<>();
+	private IArchimateModel localModel;
+	private IArchimateModel remoteModel;
 	private Color diffColor;
 	private Color localBg;
 	private Color remoteBg;
@@ -98,6 +111,14 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 		for (Diff diff : comparison.getDifferences()) {
 			diffResolutions.put(diff, false);
+		}
+		for (Match m : comparison.getMatches()) {
+			if (localModel == null && m.getRight() instanceof IArchimateModel right) {
+				localModel = right;
+			}
+			if (remoteModel == null && m.getLeft() instanceof IArchimateModel left) {
+				remoteModel = left;
+			}
 		}
 
 		diffColor = new Color(parentShell.getDisplay(), 255, 230, 230);
@@ -147,10 +168,13 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			IStructuredSelection sel = (IStructuredSelection) event.getSelection();
 			if (!sel.isEmpty() && sel.getFirstElement() instanceof UnifiedConflictRow u) {
 				updateInfoTextForUnifiedRow(u);
-				btnVisualCompare.setEnabled(getDiagramModel(u.anchorObject) != null);
+				boolean hasDiagram = getDiagramModel(u.anchorObject) != null;
+				btnVisualCompare.setEnabled(hasDiagram);
+				btnVisualDiff.setEnabled(hasDiagram);
 			} else {
 				infoText.setText("");
 				btnVisualCompare.setEnabled(false);
+				btnVisualDiff.setEnabled(false);
 			}
 			updateConflictCountMessage();
 		});
@@ -176,7 +200,9 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			masterViewer.setSelection(new StructuredSelection(unifiedRows.get(0)), true);
 			updateInfoTextForUnifiedRow(unifiedRows.get(0));
 			EObject firstObj = unifiedRows.get(0).anchorObject;
-			btnVisualCompare.setEnabled(getDiagramModel(firstObj) != null);
+			boolean hasDiagram = getDiagramModel(firstObj) != null;
+			btnVisualCompare.setEnabled(hasDiagram);
+			btnVisualDiff.setEnabled(hasDiagram);
 		}
 		packTableColumns(masterViewer.getTable());
 		updateConflictCountMessage();
@@ -474,7 +500,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	/** Bulk LOCAL/REMOTE buttons and debug/compare actions above the table. */
 	private void createToolbar(Composite parent) {
 		Composite t = new Composite(parent, SWT.NONE);
-		t.setLayout(new GridLayout(5, false));
+		t.setLayout(new GridLayout(7, false));
 
 		Button b1 = new Button(t, SWT.PUSH);
 		b1.setText("ALL TO LOCAL");
@@ -517,6 +543,12 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		btnVisualCompare.setToolTipText("Show visual comparison of the diagram");
 		btnVisualCompare.setEnabled(false);
 		btnVisualCompare.addListener(SWT.Selection, e -> showVisualCompare());
+
+		btnVisualDiff = new Button(t, SWT.PUSH);
+		btnVisualDiff.setText("Visual Diff Overlay");
+		btnVisualDiff.setToolTipText("Show LOCAL diagram with overlay marks for visual differences vs REMOTE");
+		btnVisualDiff.setEnabled(false);
+		btnVisualDiff.addListener(SWT.Selection, e -> showVisualDiff());
 	}
 
 	/** Plain-text audit report in a popup (copy-friendly). */
@@ -599,6 +631,64 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		shell.open();
 	}
 
+	/** Overlay {@link ViewDiffComposite} of LOCAL vs REMOTE for the selected row's diagram. */
+	private void showVisualDiff() {
+		IStructuredSelection sel = (IStructuredSelection) masterViewer.getSelection();
+		if (sel.isEmpty()) return;
+
+		EObject obj = getAnyObjectFromSelection(sel.getFirstElement());
+		IDiagramModel localDiagram = getDiagramModel(obj);
+		if (localDiagram == null) return;
+
+		Match match = comparison.getMatch(localDiagram);
+		if (match == null) return;
+
+		IDiagramModel remoteDiagram = (IDiagramModel) match.getLeft();
+		if (remoteDiagram == null) {
+			MessageDialog.openInformation(getShell(), "Visual Diff", "This diagram does not exist in the REMOTE version.");
+			return;
+		}
+
+		Shell shell = new Shell(getShell(), SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX);
+		shell.setText("Visual Diff: " + localDiagram.getName());
+		shell.setLayout(new GridLayout(1, false));
+		shell.setSize(1200, 800);
+
+		IArchimateModel ourModel = localDiagram.getArchimateModel();
+		IArchimateModel theirModel = remoteDiagram.getArchimateModel();
+		if (ourModel == null || theirModel == null) {
+			MessageDialog.openError(getShell(), "Visual Diff", "Could not resolve LOCAL/REMOTE models for this diagram.");
+			return;
+		}
+		IArchimateModel originModel = null;
+		Match modelMatch = comparison.getMatch(ourModel);
+		if (modelMatch != null && modelMatch.getOrigin() instanceof IArchimateModel origin) {
+			originModel = origin;
+		}
+		IArchimateModel mergedBase;
+		try {
+			mergedBase = MergePreview.mergeExceptConflicts(ourModel, theirModel, originModel);
+		}
+		catch (RuntimeException ex) {
+			MessageDialog.openError(getShell(), "Visual Diff",
+					"Failed to build merge preview: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
+			return;
+		}
+
+		Set<String> conflictVisualIds = collectConflictVisualIds(localDiagram);
+
+		ViewDiffComposite comp = new ViewDiffComposite(shell, SWT.NONE);
+		comp.setApplyHandler(decisions -> applyVisualDecisions(localDiagram, decisions));
+		comp.setDiagramModels(remoteDiagram, localDiagram, conflictVisualIds, mergedBase);
+
+		org.eclipse.swt.graphics.Rectangle displayRect = shell.getDisplay().getPrimaryMonitor().getBounds();
+		int x = displayRect.x + (displayRect.width - 1200) / 2;
+		int y = displayRect.y + (displayRect.height - 800) / 2;
+		shell.setLocation(x, y);
+
+		shell.open();
+	}
+
 	/** Resolves table selection to an anchor {@link EObject}. */
 	private EObject getAnyObjectFromSelection(Object selected) {
 		if (selected instanceof UnifiedConflictRow u) {
@@ -611,6 +701,103 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			return getAnyObject(d);
 		}
 		return null;
+	}
+
+	/** Visual object ids of REAL conflicts that live on {@code localDiagram}. */
+	private Set<String> collectConflictVisualIds(IDiagramModel localDiagram) {
+		Set<String> ids = new LinkedHashSet<>();
+		if (localDiagram == null || visibleConflicts == null) {
+			return ids;
+		}
+		for (Conflict conflict : visibleConflicts) {
+			for (Diff diff : conflict.getDifferences()) {
+				EObject obj = getAnyObject(diff);
+				if (!isOnDiagram(obj, localDiagram)) {
+					continue;
+				}
+				String visualId = getVisualObjectId(obj);
+				if (visualId != null && !visualId.isEmpty()) {
+					ids.add(visualId);
+				}
+			}
+		}
+		return ids;
+	}
+
+	/** Writes visual Local/Remote choices onto matching REAL conflicts for {@code localDiagram}. */
+	private void applyVisualDecisions(IDiagramModel localDiagram, Map<String, VisualDecision> decisions) {
+		if (decisions == null || decisions.isEmpty()) {
+			return;
+		}
+		Set<String> conflictIds = collectConflictVisualIds(localDiagram);
+		if (visibleConflicts != null) {
+			for (Conflict conflict : visibleConflicts) {
+				String visualId = null;
+				for (Diff diff : conflict.getDifferences()) {
+					EObject obj = getAnyObject(diff);
+					if (!isOnDiagram(obj, localDiagram)) {
+						continue;
+					}
+					visualId = getVisualObjectId(obj);
+					if (visualId != null && !visualId.isEmpty()) {
+						break;
+					}
+				}
+				if (visualId == null) {
+					continue;
+				}
+				VisualDecision decision = decisions.get(visualId);
+				if (decision == VisualDecision.LOCAL) {
+					for (Diff d : conflict.getDifferences()) {
+						syncDiffAndDependencies(d, false);
+					}
+				}
+				else if (decision == VisualDecision.REMOTE) {
+					for (Diff d : conflict.getDifferences()) {
+						syncDiffAndDependencies(d, true);
+					}
+				}
+			}
+		}
+		for (Map.Entry<String, VisualDecision> entry : decisions.entrySet()) {
+			String visualId = entry.getKey();
+			if (visualId == null || visualId.isEmpty() || conflictIds.contains(visualId)) {
+				continue;
+			}
+			if (entry.getValue() == VisualDecision.LOCAL) {
+				keepLocalVisualIds.add(visualId);
+			}
+			else if (entry.getValue() == VisualDecision.REMOTE) {
+				keepLocalVisualIds.remove(visualId);
+			}
+		}
+		masterViewer.refresh();
+		updateIntegrityStatus();
+		refreshInfoAfterToggle();
+	}
+
+	private boolean isOnDiagram(EObject obj, IDiagramModel localDiagram) {
+		IDiagramModel dm = getDiagramModel(obj);
+		if (dm == null || localDiagram == null) {
+			return false;
+		}
+		if (dm == localDiagram) {
+			return true;
+		}
+		String localId = localDiagram.getId();
+		return localId != null && localId.equals(dm.getId());
+	}
+
+	/** Walks up to the diagram node or connection that the visual table uses as its id. */
+	private String getVisualObjectId(EObject obj) {
+		EObject cur = obj;
+		while (cur != null && !(cur instanceof IDiagramModel)) {
+			if (cur instanceof IDiagramModelObject || cur instanceof IDiagramModelConnection) {
+				return getObjectId(cur);
+			}
+			cur = cur.eContainer();
+		}
+		return "";
 	}
 
 	/** Walks ancestors to find the containing {@link IDiagramModel}. */
@@ -854,90 +1041,6 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		infoText.setStyleRanges(styles.toArray(new StyleRange[0]));
 	}
 
-	/** Long formatted description of one {@link Conflict} with styled LOCAL/REMOTE hints. */
-	private void appendFullConflictDescription(StringBuilder sb, List<StyleRange> styles, Conflict c) {
-		if (c.getDifferences().isEmpty()) {
-			appendStyled(sb, styles, "(Empty conflict)\n", true);
-			return;
-		}
-		Diff firstDiff = c.getDifferences().get(0);
-		EObject obj = getAnyObject(firstDiff);
-
-		boolean resolveAsRemote = getConflictResolution(c);
-		String kindLabel = c.getKind() == ConflictKind.REAL ? "⚠  REAL CONFLICT" : "ℹ  PSEUDO CONFLICT";
-		appendStyled(sb, styles, kindLabel + "\n", true);
-		sb.append("\n");
-
-		appendStyled(sb, styles, "OBJECT\n", true);
-		sb.append("  Name  : ").append(ArchiLabelProvider.INSTANCE.getLabel(obj)).append("\n");
-		sb.append("  Type  : ").append(humanType(obj)).append("\n");
-		sb.append("  ID    : ").append(getObjectId(obj)).append("\n");
-		sb.append("  Path  : ").append(getObjectLocation(obj)).append("\n");
-		sb.append("\n");
-
-		appendStyled(sb, styles, "WHAT CHANGED\n", true);
-		Set<EStructuralFeature> features = new LinkedHashSet<>();
-		for (Diff d : c.getDifferences()) {
-			EStructuralFeature f = getFeature(d);
-			if (f != null) features.add(f);
-		}
-		Match m = firstDiff.getMatch();
-		for (EStructuralFeature f : features) {
-			sb.append("  Property : ").append(getHumanName(f.getName())).append("\n");
-			sb.append("  ├─ Base  : ").append(getValRich(m.getOrigin(), f)).append("\n");
-			String localVal  = getValRich(m.getRight(), f);
-			String remoteVal = getValRich(m.getLeft(), f);
-			if (resolveAsRemote) {
-				appendStyled(sb, styles, "  ├─ Local  : ", true);
-				sb.append(localVal).append("  (will be replaced)\n");
-				appendStyled(sb, styles, "  └─ Remote : ", true);
-				int remStart = sb.length();
-				sb.append(remoteVal).append("  ✓ WILL BE USED\n");
-				styles.add(new StyleRange(remStart, remoteVal.length() + 14,
-						getShell().getDisplay().getSystemColor(SWT.COLOR_DARK_BLUE), null, SWT.BOLD));
-			} else {
-				appendStyled(sb, styles, "  ├─ Local  : ", true);
-				int locStart = sb.length();
-				sb.append(localVal).append("  ✓ WILL BE KEPT\n");
-				styles.add(new StyleRange(locStart, localVal.length() + 14,
-						getShell().getDisplay().getSystemColor(SWT.COLOR_DARK_GREEN), null, SWT.BOLD));
-				appendStyled(sb, styles, "  └─ Remote : ", true);
-				sb.append(remoteVal).append("  (will be discarded)\n");
-			}
-			sb.append("\n");
-		}
-
-		appendStyled(sb, styles, "RESOLUTION\n", true);
-		int resStart = sb.length();
-		String resLabel = resolveAsRemote ? "  → REMOTE ACCEPTED (remote changes will be applied)" 
-				: "  → LOCAL KEPT (remote changes will be discarded)";
-		sb.append(resLabel).append("\n");
-		styles.add(new StyleRange(resStart, resLabel.length(),
-				resolveAsRemote
-					? getShell().getDisplay().getSystemColor(SWT.COLOR_DARK_BLUE)
-					: getShell().getDisplay().getSystemColor(SWT.COLOR_DARK_GREEN),
-					null, SWT.BOLD));
-		sb.append("\n");
-
-		appendStyled(sb, styles, "ALL DIFFS IN THIS CONFLICT\n", true);
-		for (Diff d : c.getDifferences()) {
-			String side = d.getSource() == DifferenceSource.LEFT ? "[REMOTE]" : "[LOCAL] ";
-			EStructuralFeature f = getFeature(d);
-			String feat = f != null ? getHumanName(f.getName()) : d.getClass().getSimpleName();
-			String kind = d.getKind().name();
-			sb.append("  ").append(side).append(" ").append(kind).append(" on «").append(feat).append("»\n");
-		}
-	}
-
-	/** Legacy path: show {@link #appendFullConflictDescription} for a whole conflict (unused if only unified rows). */
-	private void updateInfoTextForConflict(Conflict c) {
-		StringBuilder sb = new StringBuilder();
-		List<StyleRange> styles = new ArrayList<>();
-		appendFullConflictDescription(sb, styles, c);
-		infoText.setText(sb.toString());
-		infoText.setStyleRanges(styles.toArray(new StyleRange[0]));
-	}
-
 	/** Returns a human-readable type name for an EObject. */
 	private String humanType(EObject obj) {
 		if (obj == null) return "null";
@@ -1017,35 +1120,6 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		if (maxChars <= 1)
 			return "…";
 		return oneLine.substring(0, maxChars - 1) + "…";
-	}
-
-	/**
-	 * Like {@link #getVal(EObject, EStructuralFeature)} but for a single EObject with richer output:
-	 * shows both the label and the ID for EObject values.
-	 */
-	private String getValRich(EObject obj, EStructuralFeature f) {
-		if (obj == null) return "(None)";
-		if (!obj.eClass().getEAllStructuralFeatures().contains(f)) return "(N/A)";
-		Object v = obj.eGet(f);
-		if (v instanceof List<?> list) {
-			if (list.isEmpty()) return "(Empty)";
-			return list.stream().map(item -> {
-				if (item instanceof EObject eo) {
-					String lbl = mergeListItemLabel(eo);
-					String id  = getObjectId(eo);
-					return lbl + (id.isEmpty() ? "" : " [" + id.substring(0, Math.min(8, id.length())) + "…]");
-				}
-				return String.valueOf(item);
-			}).collect(Collectors.joining(", "));
-		}
-		if (v instanceof EObject eo) {
-			String lbl = ArchiLabelProvider.INSTANCE.getLabel(eo);
-			String id  = getObjectId(eo);
-			String type = humanType(eo);
-			return lbl + "  (" + type + ")"
-					+ (id.isEmpty() ? "" : "\n             id: " + id);
-		}
-		return String.valueOf(v);
 	}
 
 	/** Appends {@code text} and registers a bold {@link StyleRange} starting at current length. */
@@ -1273,6 +1347,36 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	 */
 	public Map<Diff, Boolean> getDiffResolutions() {
 		return diffResolutions;
+	}
+
+	/**
+	 * Visual object ids the user chose Local for outside REAL conflicts; the merge must keep LOCAL
+	 * and skip the matching REMOTE (LEFT) diffs.
+	 */
+	public Set<String> getKeepLocalVisualIds() {
+		return Set.copyOf(keepLocalVisualIds);
+	}
+
+	/** Non-conflicting REMOTE folder content diffs the merge must skip (user kept LOCAL). */
+	public Set<Diff> getForcedLocalDiffs() {
+		return Set.copyOf(forcedLocalDiffs);
+	}
+
+	/**
+	 * Final folder of every child with a folder decision: child id to target folder id, or {@code null} value
+	 * when the child must not exist in the merge result.
+	 */
+	public Map<String, String> getFolderPlacements() {
+		if (localModel == null || remoteModel == null || folderItemDecisions.isEmpty()) {
+			return Map.of();
+		}
+		Set<String> ids = new LinkedHashSet<>();
+		folderItemDecisions.forEach((id, decision) -> {
+			if (decision != VisualDecision.UNRESOLVED) {
+				ids.add(id);
+			}
+		});
+		return newFolderBuilder(Map.of()).placements(ids);
 	}
 
 	/** {@inheritDoc} */

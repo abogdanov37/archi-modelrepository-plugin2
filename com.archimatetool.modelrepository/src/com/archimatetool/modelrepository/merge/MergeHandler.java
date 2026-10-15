@@ -11,8 +11,6 @@ package com.archimatetool.modelrepository.merge;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -23,17 +21,12 @@ import java.util.stream.Collectors;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.emf.common.util.BasicMonitor;
 import org.eclipse.emf.compare.Comparison;
-import org.eclipse.emf.compare.Conflict;
 import org.eclipse.emf.compare.ConflictKind;
 import org.eclipse.emf.compare.Diff;
-import org.eclipse.emf.compare.DifferenceKind;
-import org.eclipse.emf.compare.DifferenceSource;
-import org.eclipse.emf.compare.ReferenceChange;
 import org.eclipse.emf.compare.merge.BatchMerger;
 import org.eclipse.emf.compare.merge.IMerger;
 import org.eclipse.emf.compare.merge.IMerger.RegistryImpl;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.jface.dialogs.ProgressMonitorDialog;
 import org.eclipse.jgit.api.MergeCommand.FastForwardMode;
 import org.eclipse.jgit.api.MergeResult;
@@ -46,9 +39,7 @@ import org.eclipse.ui.IWorkbenchWindow;
 import com.archimatetool.editor.model.IArchiveManager;
 import com.archimatetool.editor.model.IEditorModelManager;
 import com.archimatetool.model.IArchimateModel;
-import com.archimatetool.model.IArchimateRelationship;
 import com.archimatetool.model.IDiagramModel;
-import com.archimatetool.model.IDiagramModelArchimateConnection;
 import com.archimatetool.model.IDiagramModelArchimateObject;
 import com.archimatetool.modelrepository.IRunnable;
 import com.archimatetool.modelrepository.repository.BranchInfo;
@@ -249,11 +240,17 @@ public class MergeHandler {
 			BranchInfo branchToMerge, Comparison comparison, IArchimateModel ourModel, IArchimateModel theirModel, IArchiRepository repo) throws IOException, GitAPIException {
 
 		AtomicReference<Map<Diff, Boolean>> resolutionsRef = new AtomicReference<>();
+		AtomicReference<Set<String>> keepLocalRef = new AtomicReference<>(Set.of());
+		AtomicReference<Set<Diff>> forcedLocalRef = new AtomicReference<>(Set.of());
+		AtomicReference<Map<String, String>> folderPlacementsRef = new AtomicReference<>(Map.of());
 
 		workbenchWindow.getShell().getDisplay().syncExec(() -> {
 			MergeConflictDialog dialog = new MergeConflictDialog(workbenchWindow.getShell(), comparison);
 			if (dialog.open() == org.eclipse.jface.window.Window.OK) {
 				resolutionsRef.set(dialog.getDiffResolutions());
+				keepLocalRef.set(dialog.getKeepLocalVisualIds());
+				forcedLocalRef.set(dialog.getForcedLocalDiffs());
+				folderPlacementsRef.set(dialog.getFolderPlacements());
 			}
 		});
 
@@ -272,7 +269,8 @@ public class MergeHandler {
 			IRunnable.run(progressDialog, true, false, monitor -> {
 				monitor.beginTask("Merging models...", IProgressMonitor.UNKNOWN);
 
-				List<Diff> toApply = filterDiffsToApply(comparison, resolutions);
+				List<Diff> toApply = MergePreview.filterDiffsToApply(comparison, resolutions, keepLocalRef.get(),
+						forcedLocalRef.get());
 
 				if (!toApply.isEmpty()) {
 					new BatchMerger(mergerRegistry).copyAllLeftToRight(toApply, new BasicMonitor());
@@ -297,59 +295,6 @@ public class MergeHandler {
 			}
 			throw new IOException("Merge failed: " + ex.getMessage(), ex);
 		}
-	}
-
-	/**
-	 * LEFT (remote) diffs safe to merge with {@link BatchMerger}: skips conflict members, local-only objects, and destructive list ops when keeping LOCAL.
-	 */
-	private List<Diff> filterDiffsToApply(Comparison comparison, Map<Diff, Boolean> resolutions) {
-		List<Diff> toApply = new ArrayList<>();
-		Set<EObject> protectedObjects = new HashSet<>();
-
-		for (Conflict conflict : comparison.getConflicts()) {
-			for (Diff d : conflict.getDifferences()) {
-				EObject obj = MergeUtils.getObjectFromDiff(d);
-				if (obj != null) protectedObjects.add(obj);
-			}
-		}
-		for (Diff diff : comparison.getDifferences()) {
-			if (diff.getSource() == DifferenceSource.RIGHT) {
-				EObject obj = MergeUtils.getObjectFromDiff(diff);
-				if (obj != null) protectedObjects.add(obj);
-			}
-		}
-
-		for (Diff diff : comparison.getDifferences()) {
-			Conflict conflict = diff.getConflict();
-			if (conflict != null) {
-				// Conflict resolutions are applied directly in ModelHealer via eSet,
-				// not through BatchMerger. BatchMerger behaves unpredictably for conflict
-				// diffs (it may call removeFromRight on RIGHT diffs, reverting them to BASE).
-				continue;
-			}
-			if (diff.getSource() == DifferenceSource.LEFT) {
-				EObject remoteObj = MergeUtils.getObjectFromDiff(diff);
-				if (remoteObj != null && protectedObjects.contains(remoteObj)) continue;
-				
-				// Protection: Don't allow REMOTE to delete or move objects in LOCAL collections (folders, diagrams)
-				// if we are resolving conflicts in favor of LOCAL.
-				if (diff instanceof ReferenceChange rc && rc.getReference().isMany()) {
-					boolean isRemoteResolution = Boolean.TRUE.equals(resolutions.get(diff));
-					if (!isRemoteResolution) {
-						// If REMOTE wants to REMOVE something from a list, but that something exists in LOCAL,
-						// we skip this list-change to preserve LOCAL structure.
-						if (rc.getKind() == DifferenceKind.DELETE || rc.getKind() == DifferenceKind.MOVE) {
-							continue; 
-						}
-					}
-				}
-
-				if (!(diff.getKind() == DifferenceKind.DELETE && diff.getMatch().getLeft() == null)) {
-					toApply.add(diff);
-				}
-			}
-		}
-		return toApply;
 	}
 
 	/**

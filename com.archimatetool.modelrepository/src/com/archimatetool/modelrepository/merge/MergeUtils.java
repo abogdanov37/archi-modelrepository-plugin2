@@ -17,6 +17,8 @@ import com.archimatetool.model.IArchimateElement;
 import com.archimatetool.model.IArchimateModel;
 import com.archimatetool.model.IDiagramModel;
 import com.archimatetool.model.IDiagramModelArchimateObject;
+import com.archimatetool.model.IDiagramModelConnection;
+import com.archimatetool.model.IDiagramModelObject;
 import com.archimatetool.modelrepository.repository.GitUtils;
 
 /**
@@ -75,6 +77,20 @@ public class MergeUtils {
      */
     public static String getObjectId(EObject obj) {
         return (obj instanceof com.archimatetool.model.IIdentifier id) ? id.getId() : null;
+    }
+
+    /**
+     * Id of the diagram node or connection that contains {@code obj}, or {@code null}.
+     */
+    public static String getDiagramVisualId(EObject obj) {
+        EObject cur = obj;
+        while (cur != null && !(cur instanceof IDiagramModel)) {
+            if (cur instanceof IDiagramModelObject || cur instanceof IDiagramModelConnection) {
+                return getObjectId(cur);
+            }
+            cur = cur.eContainer();
+        }
+        return null;
     }
 
     /**

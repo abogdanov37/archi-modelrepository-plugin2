@@ -9,15 +9,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.eclipse.gef.GraphicalViewer;
 import org.eclipse.jface.layout.GridLayoutFactory;
+import org.eclipse.jface.resource.JFaceResources;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.custom.SashForm;
 import org.eclipse.swt.custom.ScrolledComposite;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Image;
+import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Control;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Scale;
 
@@ -37,8 +41,10 @@ public class ViewComparisonComposite extends Composite {
     private static AtomicInteger lastScaleValue1 = new AtomicInteger(SCALE_MAX);
     private static AtomicInteger lastScaleValue2 = new AtomicInteger(SCALE_MAX);
     
-    private SashForm sash;
+    private SashForm sash, resultSash;
     private ViewComposite c1, c2;
+    private Composite resultParent;
+    private GraphicalViewer resultViewer;
     
     public ViewComparisonComposite(Composite parent, int style) {
         super(parent, style);
@@ -55,10 +61,11 @@ public class ViewComparisonComposite extends Composite {
         createDualView();
         c1.setDiagramModel(dm1);
         c2.setDiagramModel(dm2);
+        setResultViewer(dm2);
     }
     
     private void createSingleView() {
-        if(sash != null) {
+        if(sash != null || resultSash != null) {
             clear();
         }
         
@@ -71,28 +78,88 @@ public class ViewComparisonComposite extends Composite {
     private void createDualView() {
         if(sash == null) {
             clear();
-            sash = new SashForm(this, SWT.HORIZONTAL);
-            sash.setLayoutData(new GridData(GridData.FILL_BOTH));
+            
+            resultSash = new SashForm(this, SWT.VERTICAL);
+            resultSash.setLayoutData(new GridData(GridData.FILL_BOTH));
+            resultSash.setBackground(resultSash.getDisplay().getSystemColor(SWT.COLOR_WIDGET_BACKGROUND));
+            
+            sash = new SashForm(resultSash, SWT.HORIZONTAL);
             sash.setBackground(sash.getDisplay().getSystemColor(SWT.COLOR_WIDGET_BACKGROUND));
             c1 = new ViewComposite(sash, lastScaleValue1);
             c2 = new ViewComposite(sash, lastScaleValue2);
+            sash.setWeights(new int[] { 50, 50 });
+            
+            createResultView();
+            resultSash.setWeights(new int[] { 55, 45 });
             layout();
         }
     }
     
+    private void createResultView() {
+        Composite resultPanel = new Composite(resultSash, SWT.NONE);
+        resultPanel.setBackground(resultPanel.getDisplay().getSystemColor(SWT.COLOR_LIST_BACKGROUND));
+        resultPanel.setBackgroundMode(SWT.INHERIT_FORCE);
+        resultPanel.setLayout(new GridLayout());
+        
+        Label title = new Label(resultPanel, SWT.CENTER);
+        title.setText("MERGE RESULT"); //$NON-NLS-1$
+        title.setFont(JFaceResources.getFontRegistry().getBold(JFaceResources.DEFAULT_FONT));
+        title.setForeground(resultPanel.getDisplay().getSystemColor(SWT.COLOR_DARK_YELLOW));
+
+        resultParent = new ScrolledComposite(resultPanel, SWT.H_SCROLL | SWT.V_SCROLL );
+        resultParent.setLayoutData(new GridData(GridData.FILL_BOTH));
+        resultParent.setLayout(new FillLayout());
+    }
+    
+    private void setResultViewer(IDiagramModel dm) {
+        disposeResultViewer();
+        
+        if(resultParent == null || resultParent.isDisposed() || dm == null) {
+            return;
+        }
+        
+        try {
+            resultViewer = DiagramUtils.createViewer(dm, resultParent);
+            resultParent.layout();
+        }
+        catch(RuntimeException ex) {
+            resultViewer = null;
+        }
+    }
+    
+    private void disposeResultViewer() {
+        if(resultViewer != null) {
+            Control control = resultViewer.getControl();
+            if(control != null && !control.isDisposed()) {
+                control.dispose();
+            }
+            resultViewer = null;
+        }
+    }
+    
     public void clear() {
-        if(c1 != null) {
-            c1.dispose();
-            c1 = null;
+        disposeResultViewer();
+        
+        if(resultSash != null && !resultSash.isDisposed()) {
+            resultSash.dispose();
         }
-        if(c2 != null) {
-            c2.dispose();
-            c2 = null;
-        }
-        if(sash != null) {
+        resultSash = null;
+        resultParent = null;
+        
+        if(sash != null && !sash.isDisposed()) {
             sash.dispose();
-            sash = null;
         }
+        sash = null;
+        
+        if(c1 != null && !c1.isDisposed()) {
+            c1.dispose();
+        }
+        c1 = null;
+        
+        if(c2 != null && !c2.isDisposed()) {
+            c2.dispose();
+        }
+        c2 = null;
     }
     
     private class ViewComposite extends Composite {
