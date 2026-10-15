@@ -242,15 +242,13 @@ public class MergeHandler {
 		AtomicReference<Map<Diff, Boolean>> resolutionsRef = new AtomicReference<>();
 		AtomicReference<Set<String>> keepLocalRef = new AtomicReference<>(Set.of());
 		AtomicReference<Set<Diff>> forcedLocalRef = new AtomicReference<>(Set.of());
-		AtomicReference<Map<String, String>> folderPlacementsRef = new AtomicReference<>(Map.of());
-
+		
 		workbenchWindow.getShell().getDisplay().syncExec(() -> {
 			MergeConflictDialog dialog = new MergeConflictDialog(workbenchWindow.getShell(), comparison);
 			if (dialog.open() == org.eclipse.jface.window.Window.OK) {
 				resolutionsRef.set(dialog.getDiffResolutions());
 				keepLocalRef.set(dialog.getKeepLocalVisualIds());
 				forcedLocalRef.set(dialog.getForcedLocalDiffs());
-				folderPlacementsRef.set(dialog.getFolderPlacements());
 			}
 		});
 

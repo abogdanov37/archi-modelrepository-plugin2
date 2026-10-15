@@ -69,14 +69,20 @@ import com.archimatetool.modelrepository.dialogs.ViewComparisonComposite;
 import com.archimatetool.modelrepository.dialogs.ViewDiffComposite;
 
 /**
- * Modal UI for reviewing REAL EMF Compare conflicts before merge: per-property rows, LOCAL/REMOTE choice,
- * styled explanation panel, and optional diagram comparison.
+ * Modal UI for reviewing REAL EMF Compare conflicts before merge: per-property
+ * rows, LOCAL/REMOTE choice, styled explanation panel, and optional diagram
+ * comparison.
  */
 public class MergeConflictDialog extends TitleAreaDialog {
 
-	/** Mine/Theirs columns: max display width after pack (details in info panel). */
+	/**
+	 * Mine/Theirs columns: max display width after pack (details in info panel).
+	 */
 	private static final int TABLE_MINE_THEIRS_MAX_WIDTH_PX = 300;
-	/** Max characters in Mine/Theirs cells before «…» (avoids huge strings + layout glitches). */
+	/**
+	 * Max characters in Mine/Theirs cells before «…» (avoids huge strings + layout
+	 * glitches).
+	 */
 	private static final int TABLE_MINE_THEIRS_MAX_CHARS = 96;
 	/** Location column (view / folder path): cap width; full path in info panel. */
 	private static final int TABLE_LOCATION_MAX_WIDTH_PX = 280;
@@ -91,9 +97,14 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 	private Map<Diff, Boolean> diffResolutions = new HashMap<>();
 	private final Set<String> keepLocalVisualIds = new LinkedHashSet<>();
-	/** Folder merge decisions keyed by folder child id (shared by every folder the child appears in). */
+	/**
+	 * Folder merge decisions keyed by folder child id (shared by every folder the
+	 * child appears in).
+	 */
 	private final Map<String, VisualDecision> folderItemDecisions = new LinkedHashMap<>();
-	/** Non-conflicting REMOTE folder content diffs the user rejected (kept LOCAL). */
+	/**
+	 * Non-conflicting REMOTE folder content diffs the user rejected (kept LOCAL).
+	 */
 	private final Set<Diff> forcedLocalDiffs = new LinkedHashSet<>();
 	private IArchimateModel localModel;
 	private IArchimateModel remoteModel;
@@ -103,7 +114,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 	/**
 	 * @param parentShell parent shell
-	 * @param comparison  EMF Compare result for the merge in progress (mutated only for debug copy)
+	 * @param comparison  EMF Compare result for the merge in progress (mutated only
+	 *                    for debug copy)
 	 */
 	public MergeConflictDialog(Shell parentShell, Comparison comparison) {
 		super(parentShell);
@@ -138,7 +150,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * Builds sash with conflict table, styled info panel, toolbar, and context menu.
+	 * Builds sash with conflict table, styled info panel, toolbar, and context
+	 * menu.
 	 */
 	@Override
 	protected Control createDialogArea(Composite parent) {
@@ -148,7 +161,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		container.setLayoutData(new GridData(GridData.FILL_BOTH));
 
 		setTitle("Merge Conflict Auditor");
-		setMessage("Double-click row to toggle LOCAL/REMOTE. Resolution column + row color: green = LOCAL, blue = REMOTE. Right-click to Copy ID.");
+		setMessage(
+				"Double-click row to toggle LOCAL/REMOTE. Resolution column + row color: green = LOCAL, blue = REMOTE. Right-click to Copy ID.");
 
 		createToolbar(container);
 
@@ -156,7 +170,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		mainSash.setLayoutData(new GridData(GridData.FILL_BOTH));
 
 		createUnifiedTablePane(mainSash);
-		infoText = new StyledText(mainSash, SWT.MULTI | SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL | SWT.WRAP | SWT.READ_ONLY);
+		infoText = new StyledText(mainSash,
+				SWT.MULTI | SWT.BORDER | SWT.V_SCROLL | SWT.H_SCROLL | SWT.WRAP | SWT.READ_ONLY);
 		infoText.setBackground(parent.getDisplay().getSystemColor(SWT.COLOR_LIST_BACKGROUND));
 		infoText.setFont(JFaceResources.getTextFont());
 		mainSash.setWeights(new int[] { 40, 60 });
@@ -186,8 +201,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			}
 		});
 
-		visibleConflicts = comparison.getConflicts().stream()
-				.filter(c -> c.getKind() == ConflictKind.REAL)
+		visibleConflicts = comparison.getConflicts().stream().filter(c -> c.getKind() == ConflictKind.REAL)
 				.collect(Collectors.toList());
 
 		if (visibleConflicts.isEmpty()) {
@@ -206,11 +220,12 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		}
 		packTableColumns(masterViewer.getTable());
 		updateConflictCountMessage();
-		
+
 		// Add a summary label at the bottom
 		org.eclipse.swt.widgets.Label summaryLabel = new org.eclipse.swt.widgets.Label(container, SWT.NONE);
 		summaryLabel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-		summaryLabel.setText(String.format("Found %d REAL conflicts that require your attention.", visibleConflicts.size()));
+		summaryLabel.setText(
+				String.format("Found %d REAL conflicts that require your attention.", visibleConflicts.size()));
 
 		return area;
 	}
@@ -225,7 +240,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * One table row per (object, property) within a conflict — same grouping as the old detail table.
+	 * One table row per (object, property) within a conflict — same grouping as the
+	 * old detail table.
 	 *
 	 * @param conflict REAL conflict from {@link #comparison}
 	 * @return de-duplicated rows keyed by object id and feature name
@@ -283,7 +299,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		Comparison copy = org.eclipse.emf.ecore.util.EcoreUtil.copy(comparison);
 		copy.getConflicts().removeIf(c -> c.getKind() != ConflictKind.REAL);
 		Set<Diff> diffsInRealConflicts = new HashSet<>();
-		for(Conflict c : copy.getConflicts()) {
+		for (Conflict c : copy.getConflicts()) {
 			diffsInRealConflicts.addAll(c.getDifferences());
 		}
 		copy.getDifferences().removeIf(d -> !diffsInRealConflicts.contains(d));
@@ -356,7 +372,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		}
 	}
 
-	/** Recursively checks whether a match or any submatch carries an interesting diff. */
+	/**
+	 * Recursively checks whether a match or any submatch carries an interesting
+	 * diff.
+	 */
 	private boolean isMatchInteresting(Match match, Set<Diff> interestingDiffs) {
 		for (Diff diff : match.getDifferences()) {
 			if (interestingDiffs.contains(diff)) {
@@ -411,7 +430,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		}
 	}
 
-	/** Sets REMOTE ({@code true}) or LOCAL ({@code false}) for a conflict and all related diffs. */
+	/**
+	 * Sets REMOTE ({@code true}) or LOCAL ({@code false}) for a conflict and all
+	 * related diffs.
+	 */
 	private void toggleConflictResolution(Conflict conflict, boolean newValue) {
 		for (Diff d : conflict.getDifferences()) {
 			syncDiffAndDependencies(d, newValue);
@@ -430,7 +452,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		updateConflictCountMessage();
 	}
 
-	/** Updates banner message from {@link #validateIntegrity()} (placeholder: always OK). */
+	/**
+	 * Updates banner message from {@link #validateIntegrity()} (placeholder: always
+	 * OK).
+	 */
 	private void updateIntegrityStatus() {
 		if (validateIntegrity()) {
 			setMessage("All choices are consistent. You can safely press OK.", IMessageProvider.INFORMATION);
@@ -439,7 +464,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		}
 	}
 
-	/** Propagates resolution to {@code diff}, related objects, and EMF requires/requiredBy links. */
+	/**
+	 * Propagates resolution to {@code diff}, related objects, and EMF
+	 * requires/requiredBy links.
+	 */
 	private void syncDiffAndDependencies(Diff diff, boolean newValue) {
 		Set<Diff> toUpdate = new HashSet<>();
 		collectAllRelatedDiffs(diff, toUpdate);
@@ -449,7 +477,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * Depth-first closure of diffs that touch the same relationship/connection/concept as {@code diff}.
+	 * Depth-first closure of diffs that touch the same
+	 * relationship/connection/concept as {@code diff}.
 	 */
 	private void collectAllRelatedDiffs(Diff diff, Set<Diff> visited) {
 		if (visited.contains(diff))
@@ -576,50 +605,57 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		shell.open();
 	}
 
-	/** Side-by-side {@link ViewComparisonComposite} for REMOTE vs LOCAL diagram of the selected row. */
+	/**
+	 * Side-by-side {@link ViewComparisonComposite} for REMOTE vs LOCAL diagram of
+	 * the selected row.
+	 */
 	private void showVisualCompare() {
 		IStructuredSelection sel = (IStructuredSelection) masterViewer.getSelection();
-		if (sel.isEmpty()) return;
-		
+		if (sel.isEmpty())
+			return;
+
 		EObject obj = getAnyObjectFromSelection(sel.getFirstElement());
 		IDiagramModel localDiagram = getDiagramModel(obj);
-		if (localDiagram == null) return;
-		
+		if (localDiagram == null)
+			return;
+
 		// Find the match for this diagram
 		Match match = comparison.getMatch(localDiagram);
-		if (match == null) return;
-		
+		if (match == null)
+			return;
+
 		IDiagramModel remoteDiagram = (IDiagramModel) match.getLeft();
 		if (remoteDiagram == null) {
-			MessageDialog.openInformation(getShell(), "Visual Compare", "This diagram does not exist in the REMOTE version.");
+			MessageDialog.openInformation(getShell(), "Visual Compare",
+					"This diagram does not exist in the REMOTE version.");
 			return;
 		}
-		
+
 		// Show comparison dialog
 		Shell shell = new Shell(getShell(), SWT.DIALOG_TRIM | SWT.RESIZE | SWT.MAX);
 		shell.setText("Visual Compare: " + localDiagram.getName());
 		shell.setLayout(new GridLayout(1, false));
 		shell.setSize(1200, 800);
-		
+
 		Composite labelsComp = new Composite(shell, SWT.NONE);
 		labelsComp.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 		labelsComp.setLayout(new GridLayout(2, true));
-		
+
 		org.eclipse.swt.widgets.Label remoteLabel = new org.eclipse.swt.widgets.Label(labelsComp, SWT.CENTER);
 		remoteLabel.setText("REMOTE VERSION");
 		remoteLabel.setFont(JFaceResources.getFontRegistry().getBold(JFaceResources.DEFAULT_FONT));
 		remoteLabel.setForeground(shell.getDisplay().getSystemColor(SWT.COLOR_BLUE));
 		remoteLabel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-		
+
 		org.eclipse.swt.widgets.Label localLabel = new org.eclipse.swt.widgets.Label(labelsComp, SWT.CENTER);
 		localLabel.setText("LOCAL VERSION");
 		localLabel.setFont(JFaceResources.getFontRegistry().getBold(JFaceResources.DEFAULT_FONT));
 		localLabel.setForeground(shell.getDisplay().getSystemColor(SWT.COLOR_DARK_GREEN));
 		localLabel.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-		
+
 		ViewComparisonComposite comp = new ViewComparisonComposite(shell, SWT.NONE);
 		comp.setDiagramModels(remoteDiagram, localDiagram);
-		
+
 		// Center the shell on the screen
 		shell.pack();
 		shell.setSize(1200, 800);
@@ -627,25 +663,32 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		int x = displayRect.x + (displayRect.width - 1200) / 2;
 		int y = displayRect.y + (displayRect.height - 800) / 2;
 		shell.setLocation(x, y);
-		
+
 		shell.open();
 	}
 
-	/** Overlay {@link ViewDiffComposite} of LOCAL vs REMOTE for the selected row's diagram. */
+	/**
+	 * Overlay {@link ViewDiffComposite} of LOCAL vs REMOTE for the selected row's
+	 * diagram.
+	 */
 	private void showVisualDiff() {
 		IStructuredSelection sel = (IStructuredSelection) masterViewer.getSelection();
-		if (sel.isEmpty()) return;
+		if (sel.isEmpty())
+			return;
 
 		EObject obj = getAnyObjectFromSelection(sel.getFirstElement());
 		IDiagramModel localDiagram = getDiagramModel(obj);
-		if (localDiagram == null) return;
+		if (localDiagram == null)
+			return;
 
 		Match match = comparison.getMatch(localDiagram);
-		if (match == null) return;
+		if (match == null)
+			return;
 
 		IDiagramModel remoteDiagram = (IDiagramModel) match.getLeft();
 		if (remoteDiagram == null) {
-			MessageDialog.openInformation(getShell(), "Visual Diff", "This diagram does not exist in the REMOTE version.");
+			MessageDialog.openInformation(getShell(), "Visual Diff",
+					"This diagram does not exist in the REMOTE version.");
 			return;
 		}
 
@@ -657,7 +700,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		IArchimateModel ourModel = localDiagram.getArchimateModel();
 		IArchimateModel theirModel = remoteDiagram.getArchimateModel();
 		if (ourModel == null || theirModel == null) {
-			MessageDialog.openError(getShell(), "Visual Diff", "Could not resolve LOCAL/REMOTE models for this diagram.");
+			MessageDialog.openError(getShell(), "Visual Diff",
+					"Could not resolve LOCAL/REMOTE models for this diagram.");
 			return;
 		}
 		IArchimateModel originModel = null;
@@ -668,10 +712,9 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		IArchimateModel mergedBase;
 		try {
 			mergedBase = MergePreview.mergeExceptConflicts(ourModel, theirModel, originModel);
-		}
-		catch (RuntimeException ex) {
-			MessageDialog.openError(getShell(), "Visual Diff",
-					"Failed to build merge preview: " + (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
+		} catch (RuntimeException ex) {
+			MessageDialog.openError(getShell(), "Visual Diff", "Failed to build merge preview: "
+					+ (ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName()));
 			return;
 		}
 
@@ -724,7 +767,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return ids;
 	}
 
-	/** Writes visual Local/Remote choices onto matching REAL conflicts for {@code localDiagram}. */
+	/**
+	 * Writes visual Local/Remote choices onto matching REAL conflicts for
+	 * {@code localDiagram}.
+	 */
 	private void applyVisualDecisions(IDiagramModel localDiagram, Map<String, VisualDecision> decisions) {
 		if (decisions == null || decisions.isEmpty()) {
 			return;
@@ -751,8 +797,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 					for (Diff d : conflict.getDifferences()) {
 						syncDiffAndDependencies(d, false);
 					}
-				}
-				else if (decision == VisualDecision.REMOTE) {
+				} else if (decision == VisualDecision.REMOTE) {
 					for (Diff d : conflict.getDifferences()) {
 						syncDiffAndDependencies(d, true);
 					}
@@ -766,8 +811,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			}
 			if (entry.getValue() == VisualDecision.LOCAL) {
 				keepLocalVisualIds.add(visualId);
-			}
-			else if (entry.getValue() == VisualDecision.REMOTE) {
+			} else if (entry.getValue() == VisualDecision.REMOTE) {
 				keepLocalVisualIds.remove(visualId);
 			}
 		}
@@ -788,7 +832,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return localId != null && localId.equals(dm.getId());
 	}
 
-	/** Walks up to the diagram node or connection that the visual table uses as its id. */
+	/**
+	 * Walks up to the diagram node or connection that the visual table uses as its
+	 * id.
+	 */
 	private String getVisualObjectId(EObject obj) {
 		EObject cur = obj;
 		while (cur != null && !(cur instanceof IDiagramModel)) {
@@ -802,11 +849,14 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 	/** Walks ancestors to find the containing {@link IDiagramModel}. */
 	private IDiagramModel getDiagramModel(EObject obj) {
-		if (obj == null) return null;
-		if (obj instanceof IDiagramModel dm) return dm;
+		if (obj == null)
+			return null;
+		if (obj instanceof IDiagramModel dm)
+			return dm;
 		EObject p = obj.eContainer();
 		while (p != null) {
-			if (p instanceof IDiagramModel dm) return dm;
+			if (p instanceof IDiagramModel dm)
+				return dm;
 			p = p.eContainer();
 		}
 		return null;
@@ -856,7 +906,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		Diff first = c.getDifferences().get(0);
 		Match m = first.getMatch();
 		EObject obj = getAnyObject(first);
-		
+
 		sb.append(String.format("[%s] Object: %s (ID: %s)\n", kind, ArchiLabelProvider.INSTANCE.getLabel(obj),
 				getObjectId(obj)));
 
@@ -904,7 +954,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return null;
 	}
 
-	/** Creates {@link #masterViewer} and column headers for the unified conflict grid. */
+	/**
+	 * Creates {@link #masterViewer} and column headers for the unified conflict
+	 * grid.
+	 */
 	private void createUnifiedTablePane(Composite parent) {
 		Composite comp = new Composite(parent, SWT.NONE);
 		comp.setLayout(new GridLayout(1, false));
@@ -926,7 +979,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * One table column with {@link ColumnLabelProvider} that reads {@link UnifiedConflictRow}.
+	 * One table column with {@link ColumnLabelProvider} that reads
+	 * {@link UnifiedConflictRow}.
 	 *
 	 * @param colIndex 1-based index matching {@code switch} in label provider
 	 */
@@ -1006,7 +1060,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		}
 	}
 
-	/** Fills {@link #infoText} for one unified row: property, location, explanation, values, object id. */
+	/**
+	 * Fills {@link #infoText} for one unified row: property, location, explanation,
+	 * values, object id.
+	 */
 	private void updateInfoTextForUnifiedRow(UnifiedConflictRow u) {
 		StringBuilder sb = new StringBuilder();
 		List<StyleRange> styles = new ArrayList<>();
@@ -1043,36 +1100,40 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 	/** Returns a human-readable type name for an EObject. */
 	private String humanType(EObject obj) {
-		if (obj == null) return "null";
+		if (obj == null)
+			return "null";
 		String raw = obj.eClass().getName();
 		return switch (raw) {
-			case "AssociationRelationship" -> "Association Relationship";
-			case "TriggeringRelationship"  -> "Triggering Relationship";
-			case "FlowRelationship"        -> "Flow Relationship";
-			case "CompositionRelationship" -> "Composition Relationship";
-			case "AggregationRelationship" -> "Aggregation Relationship";
-			case "RealizationRelationship" -> "Realization Relationship";
-			case "ServingRelationship"     -> "Serving Relationship";
-			case "AccessRelationship"      -> "Access Relationship";
-			case "AssignmentRelationship"  -> "Assignment Relationship";
-			case "InfluenceRelationship"   -> "Influence Relationship";
-			case "SpecializationRelationship" -> "Specialization Relationship";
-			case "ApplicationComponent"    -> "Application Component";
-			case "ApplicationService"      -> "Application Service";
-			case "ApplicationInterface"    -> "Application Interface";
-			case "ArchimateDiagramModel"   -> "Diagram (View)";
-			case "DiagramObject"           -> "Diagram Box";
-			case "Connection"              -> "Diagram Connection";
-			case "BusinessActor"           -> "Business Actor";
-			case "BusinessRole"            -> "Business Role";
-			case "BusinessProcess"         -> "Business Process";
-			case "TechnologyService"       -> "Technology Service";
-			case "TechnologyInteraction"   -> "Technology Interaction";
-			default -> raw;
+		case "AssociationRelationship" -> "Association Relationship";
+		case "TriggeringRelationship" -> "Triggering Relationship";
+		case "FlowRelationship" -> "Flow Relationship";
+		case "CompositionRelationship" -> "Composition Relationship";
+		case "AggregationRelationship" -> "Aggregation Relationship";
+		case "RealizationRelationship" -> "Realization Relationship";
+		case "ServingRelationship" -> "Serving Relationship";
+		case "AccessRelationship" -> "Access Relationship";
+		case "AssignmentRelationship" -> "Assignment Relationship";
+		case "InfluenceRelationship" -> "Influence Relationship";
+		case "SpecializationRelationship" -> "Specialization Relationship";
+		case "ApplicationComponent" -> "Application Component";
+		case "ApplicationService" -> "Application Service";
+		case "ApplicationInterface" -> "Application Interface";
+		case "ArchimateDiagramModel" -> "Diagram (View)";
+		case "DiagramObject" -> "Diagram Box";
+		case "Connection" -> "Diagram Connection";
+		case "BusinessActor" -> "Business Actor";
+		case "BusinessRole" -> "Business Role";
+		case "BusinessProcess" -> "Business Process";
+		case "TechnologyService" -> "Technology Service";
+		case "TechnologyInteraction" -> "Technology Interaction";
+		default -> raw;
 		};
 	}
 
-	/** One line for list cells / conflict text; ArchiLabelProvider is empty for IFeature, IProperty, etc. */
+	/**
+	 * One line for list cells / conflict text; ArchiLabelProvider is empty for
+	 * IFeature, IProperty, etc.
+	 */
 	private String mergeListItemLabel(EObject eo) {
 		if (eo instanceof IFeature f) {
 			String name = f.getName() != null ? f.getName() : "";
@@ -1108,8 +1169,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * Short preview for table cells; full text for Mine/Theirs stays in {@link InspectionRow};
-	 * full location path is shown in the info panel.
+	 * Short preview for table cells; full text for Mine/Theirs stays in
+	 * {@link InspectionRow}; full location path is shown in the info panel.
 	 */
 	private static String ellipsizeTableCell(String s, int maxChars) {
 		if (s == null)
@@ -1122,12 +1183,18 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return oneLine.substring(0, maxChars - 1) + "…";
 	}
 
-	/** Appends {@code text} and registers a bold {@link StyleRange} starting at current length. */
+	/**
+	 * Appends {@code text} and registers a bold {@link StyleRange} starting at
+	 * current length.
+	 */
 	private void appendStyled(StringBuilder sb, List<StyleRange> styles, String text, boolean bold) {
 		appendStyled(sb, styles, text, bold, null);
 	}
 
-	/** Appends {@code text} with optional bold and background highlight for {@link StyledText}. */
+	/**
+	 * Appends {@code text} with optional bold and background highlight for
+	 * {@link StyledText}.
+	 */
 	private void appendStyled(StringBuilder sb, List<StyleRange> styles, String text, boolean bold, Color bg) {
 		int start = sb.length();
 		sb.append(text);
@@ -1137,11 +1204,15 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		styles.add(sr);
 	}
 
-	/** Short label for the Object Context column: element name plus owning view name (type is in the info panel). */
+	/**
+	 * Short label for the Object Context column: element name plus owning view name
+	 * (type is in the info panel).
+	 */
 	private String getObjectShortDescription(EObject obj) {
-		if (obj == null) return "";
+		if (obj == null)
+			return "";
 		String name = ArchiLabelProvider.INSTANCE.getLabel(obj);
-		
+
 		// Walk up to the nearest diagram to show which view contains this object
 		String viewName = "";
 		EObject p = obj.eContainer();
@@ -1152,7 +1223,7 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			}
 			p = p.eContainer();
 		}
-		
+
 		return name + viewName;
 	}
 
@@ -1175,28 +1246,31 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		};
 	}
 
-	/** Verbose string representation of {@code f} on {@code obj} for reports (includes EMF types in lists). */
+	/**
+	 * Verbose string representation of {@code f} on {@code obj} for reports
+	 * (includes EMF types in lists).
+	 */
 	private String getVal(EObject obj, EStructuralFeature f) {
-		if (obj == null) return "(None)";
-		
+		if (obj == null)
+			return "(None)";
+
 		// Feature may be absent on this EClass (e.g. after partial load)
 		if (!obj.eClass().getEAllStructuralFeatures().contains(f)) {
 			return "(Not applicable)";
 		}
-		
+
 		Object v = obj.eGet(f);
 		if (v instanceof List<?> list) {
-			if (list.isEmpty()) return "(Empty)";
-			return list.stream()
-					.map(item -> {
-						if (item instanceof EObject eo) {
-							String label = mergeListItemLabel(eo);
-							String type = humanType(eo);
-							return label + " (" + type + ")";
-						}
-						return String.valueOf(item);
-					})
-					.collect(Collectors.joining(", "));
+			if (list.isEmpty())
+				return "(Empty)";
+			return list.stream().map(item -> {
+				if (item instanceof EObject eo) {
+					String label = mergeListItemLabel(eo);
+					String type = humanType(eo);
+					return label + " (" + type + ")";
+				}
+				return String.valueOf(item);
+			}).collect(Collectors.joining(", "));
 		}
 		if (v instanceof EObject eo) {
 			String label = ArchiLabelProvider.INSTANCE.getLabel(eo);
@@ -1207,7 +1281,8 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * Table cell values: labels only (no EMF type suffix); full detail lives in the info panel.
+	 * Table cell values: labels only (no EMF type suffix); full detail lives in the
+	 * info panel.
 	 */
 	private String getValForDetailTable(EObject obj, EStructuralFeature f) {
 		if (obj == null)
@@ -1230,9 +1305,13 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return String.valueOf(v);
 	}
 
-	/** Folder path from model root up to the owning view, e.g. {@code Strategy / View: Main}. */
+	/**
+	 * Folder path from model root up to the owning view, e.g.
+	 * {@code Strategy / View: Main}.
+	 */
 	private String getObjectLocation(EObject obj) {
-		if (obj == null) return "";
+		if (obj == null)
+			return "";
 		EObject p = obj.eContainer();
 		List<String> path = new ArrayList<>();
 		while (p != null) {
@@ -1240,43 +1319,41 @@ public class MergeConflictDialog extends TitleAreaDialog {
 				path.add(0, "View: " + dm.getName());
 				break;
 			}
-			if (p instanceof IFolder f) path.add(0, f.getName());
+			if (p instanceof IFolder f)
+				path.add(0, f.getName());
 			p = p.eContainer();
 		}
 		return String.join(" / ", path);
 	}
 
-	/** Delegates to {@link #generateHumanExplanation(InspectionRow, Conflict)} using current table selection’s conflict if any. */
-	private String generateHumanExplanation(InspectionRow row) {
-		IStructuredSelection masterSel = (IStructuredSelection) masterViewer.getSelection();
-		if (!masterSel.isEmpty() && masterSel.getFirstElement() instanceof UnifiedConflictRow u) {
-			return generateHumanExplanation(row, u.conflict);
-		}
-		return generateHumanExplanation(row, (Conflict) null);
-	}
-
 	/**
-	 * User-facing paragraph for the info panel from property name / technical feature and chosen side.
+	 * User-facing paragraph for the info panel from property name / technical
+	 * feature and chosen side.
 	 *
-	 * @param conflict may be {@code null} when no row is selected (defaults to LOCAL wording)
+	 * @param conflict may be {@code null} when no row is selected (defaults to
+	 *                 LOCAL wording)
 	 */
 	private String generateHumanExplanation(InspectionRow row, Conflict conflict) {
 		String prop = row.name;
 		boolean isRemote = conflict != null && getConflictResolution(conflict);
 
 		String action = isRemote ? "REMOTE version will be applied" : "LOCAL version will be kept";
-		
+
 		if (prop.contains("Target")) {
-			return "Conflict in the relationship endpoint. LOCAL points to «" + row.local + "», while REMOTE points to «" + row.remote + "». " + action + ".";
+			return "Conflict in the relationship endpoint. LOCAL points to «" + row.local
+					+ "», while REMOTE points to «" + row.remote + "». " + action + ".";
 		}
 		if (prop.contains("Source")) {
-			return "Conflict in the relationship starting point. LOCAL starts from «" + row.local + "», while REMOTE starts from «" + row.remote + "». " + action + ".";
+			return "Conflict in the relationship starting point. LOCAL starts from «" + row.local
+					+ "», while REMOTE starts from «" + row.remote + "». " + action + ".";
 		}
 		if (prop.contains("Name")) {
-			return "The object has different names. LOCAL: «" + row.local + "», REMOTE: «" + row.remote + "». " + action + ".";
+			return "The object has different names. LOCAL: «" + row.local + "», REMOTE: «" + row.remote + "». " + action
+					+ ".";
 		}
 		if (prop.contains("Geometry")) {
-			return "The position or size of this element on the diagram has been changed on both sides. " + action + ".";
+			return "The position or size of this element on the diagram has been changed on both sides. " + action
+					+ ".";
 		}
 		if (prop.contains("Line Bends")) {
 			return "The visual path (bendpoints) of the connection line has been modified differently. " + action + ".";
@@ -1285,10 +1362,12 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			return "The documentation/description text is different. " + action + ".";
 		}
 		if (prop.contains("Connections")) {
-			return "The list of visual connections for this element has changed. This often happens when relationships are reconnected. " + action + ".";
+			return "The list of visual connections for this element has changed. This often happens when relationships are reconnected. "
+					+ action + ".";
 		}
 		if (prop.contains("Model Link")) {
-			return "The link between this visual element and the underlying logical model element is different. " + action + ".";
+			return "The link between this visual element and the underlying logical model element is different. "
+					+ action + ".";
 		}
 		if ("children".equals(row.technicalPropertyName)) {
 			return "This conflict concerns the list of nested shapes inside this container on the diagram (child diagram objects). "
@@ -1319,10 +1398,12 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * @return {@code true} if user chose REMOTE for this conflict (stored on the first diff in the conflict)
+	 * @return {@code true} if user chose REMOTE for this conflict (stored on the
+	 *         first diff in the conflict)
 	 */
 	private boolean getConflictResolution(Conflict c) {
-		if (c == null || c.getDifferences().isEmpty()) return false;
+		if (c == null || c.getDifferences().isEmpty())
+			return false;
 		return diffResolutions.getOrDefault(c.getDifferences().get(0), false);
 	}
 
@@ -1331,7 +1412,10 @@ public class MergeConflictDialog extends TitleAreaDialog {
 		return "Unknown";
 	}
 
-	/** Placeholder: always {@code true} (would cross-check relationship vs connection wiring). */
+	/**
+	 * Placeholder: always {@code true} (would cross-check relationship vs
+	 * connection wiring).
+	 */
 	private boolean validateIntegrity() {
 		return true;
 	}
@@ -1343,40 +1427,27 @@ public class MergeConflictDialog extends TitleAreaDialog {
 	}
 
 	/**
-	 * @return map copied by {@link MergeHandler}: {@code true} means user accepted REMOTE for that diff’s conflict side
+	 * @return map copied by {@link MergeHandler}: {@code true} means user accepted
+	 *         REMOTE for that diff’s conflict side
 	 */
 	public Map<Diff, Boolean> getDiffResolutions() {
 		return diffResolutions;
 	}
 
 	/**
-	 * Visual object ids the user chose Local for outside REAL conflicts; the merge must keep LOCAL
-	 * and skip the matching REMOTE (LEFT) diffs.
+	 * Visual object ids the user chose Local for outside REAL conflicts; the merge
+	 * must keep LOCAL and skip the matching REMOTE (LEFT) diffs.
 	 */
 	public Set<String> getKeepLocalVisualIds() {
 		return Set.copyOf(keepLocalVisualIds);
 	}
 
-	/** Non-conflicting REMOTE folder content diffs the merge must skip (user kept LOCAL). */
+	/**
+	 * Non-conflicting REMOTE folder content diffs the merge must skip (user kept
+	 * LOCAL).
+	 */
 	public Set<Diff> getForcedLocalDiffs() {
 		return Set.copyOf(forcedLocalDiffs);
-	}
-
-	/**
-	 * Final folder of every child with a folder decision: child id to target folder id, or {@code null} value
-	 * when the child must not exist in the merge result.
-	 */
-	public Map<String, String> getFolderPlacements() {
-		if (localModel == null || remoteModel == null || folderItemDecisions.isEmpty()) {
-			return Map.of();
-		}
-		Set<String> ids = new LinkedHashSet<>();
-		folderItemDecisions.forEach((id, decision) -> {
-			if (decision != VisualDecision.UNRESOLVED) {
-				ids.add(id);
-			}
-		});
-		return newFolderBuilder(Map.of()).placements(ids);
 	}
 
 	/** {@inheritDoc} */
@@ -1394,28 +1465,33 @@ public class MergeConflictDialog extends TitleAreaDialog {
 
 	private static class InspectionRow {
 		String name, remote, local, ownerName;
-		/** EMF structural feature name (e.g. children, features) for tailored explanations. */
-		final String technicalPropertyName;
-		boolean isDifferent;
 		/**
-		 * @param n                    display name ({@link MergeConflictDialog#getHumanName(String)})
-		 * @param r                    remote (left) cell text
-		 * @param l                    local (right) cell text
-		 * @param d                    reserved for future “changed” highlighting
-		 * @param o                    short owner/context string
+		 * EMF structural feature name (e.g. children, features) for tailored
+		 * explanations.
+		 */
+		final String technicalPropertyName;
+		/**
+		 * @param n                     display name
+		 *                              ({@link MergeConflictDialog#getHumanName(String)})
+		 * @param r                     remote (left) cell text
+		 * @param l                     local (right) cell text
+		 * @param d                     reserved for future “changed” highlighting
+		 * @param o                     short owner/context string
 		 * @param technicalPropertyName EMF {@link EStructuralFeature#getName()}
 		 */
 		InspectionRow(String n, String r, String l, boolean d, String o, String technicalPropertyName) {
 			name = n;
 			remote = r;
 			local = l;
-			isDifferent = d;
 			ownerName = o;
 			this.technicalPropertyName = technicalPropertyName != null ? technicalPropertyName : "";
 		}
 	}
 
-	/** One row in the unified table: a property line belonging to a {@link Conflict}. */
+	/**
+	 * One row in the unified table: a property line belonging to a
+	 * {@link Conflict}.
+	 */
 	private static final class UnifiedConflictRow {
 		final Conflict conflict;
 		final InspectionRow inspection;
@@ -1430,30 +1506,6 @@ public class MergeConflictDialog extends TitleAreaDialog {
 			this.conflict = conflict;
 			this.inspection = inspection;
 			this.anchorObject = anchorObject;
-		}
-	}
-
-	/** {@link MessageDialog} with an extra read-only text area (technical detail). */
-	private static class CopyableErrorDialog extends MessageDialog {
-		private String techText;
-		/** Shows error dialog with selectable {@code tech} body. */
-		public static void open(Shell parent, String title, String msg, String tech) {
-			new CopyableErrorDialog(parent, title, msg, tech).open();
-		}
-
-		/** @param tech extra detail shown below the main message */
-		protected CopyableErrorDialog(Shell parent, String title, String msg, String tech) {
-			super(parent, title, null, msg, MessageDialog.ERROR, new String[] { "OK" }, 0);
-			this.techText = tech;
-		}
-		/** {@inheritDoc} */
-		@Override
-		protected Control createCustomArea(Composite parent) {
-			org.eclipse.swt.widgets.Text text = new org.eclipse.swt.widgets.Text(parent, SWT.BORDER | SWT.READ_ONLY);
-			text.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
-			text.setText(techText);
-			text.setSelection(0, techText.length());
-			return text;
 		}
 	}
 }
